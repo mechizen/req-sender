@@ -14,7 +14,12 @@ import subprocess
 import sys
 import tempfile
 import time
+import venv
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+VENV_DIR = os.path.join(HERE, ".venv")
+VENV_PYTHON = os.path.join(VENV_DIR, "bin", "python3")
 
 PORT = int(os.environ.get("PORT", "7777"))
 HOST = "127.0.0.1"
@@ -30,26 +35,62 @@ ALLOWED_ORIGINS = {
 TIMEOUT_SEC = 60
 
 
+def _has_requests(python_path: str) -> bool:
+    try:
+        subprocess.run([python_path, "-c", "import requests"],
+                       check=True, capture_output=True, timeout=5)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_requests_python() -> str | None:
+    """Find a python3 that can `import requests`, or return None."""
+    if shutil.which("python3") and _has_requests("python3"):
+        return "python3"
+    if os.path.exists(VENV_PYTHON) and _has_requests(VENV_PYTHON):
+        return VENV_PYTHON
+    return None
+
+
+def bootstrap_requests_venv() -> str | None:
+    """Create .venv and install requests. Idempotent. Returns python path or None."""
+    if not os.path.exists(VENV_PYTHON):
+        print(f"[companion] creating venv at {VENV_DIR}", file=sys.stderr)
+        try:
+            venv.create(VENV_DIR, with_pip=True)
+        except Exception as e:
+            print(f"[companion] venv create failed: {e}", file=sys.stderr)
+            return None
+    if not _has_requests(VENV_PYTHON):
+        print(f"[companion] installing requests into .venv (one-time, ~5-10s)", file=sys.stderr)
+        try:
+            subprocess.run([VENV_PYTHON, "-m", "pip", "install", "--quiet", "requests"],
+                           check=True, timeout=180)
+        except Exception as e:
+            print(f"[companion] pip install requests failed: {e}", file=sys.stderr)
+            return None
+    return VENV_PYTHON
+
+
+REQUESTS_PYTHON: str | None = None
+
+
 def detect_clients() -> dict[str, str]:
     out: dict[str, str] = {}
     if shutil.which("curl"):
         out["curl"] = "curl"
     if shutil.which("python3"):
         out["python"] = "python3 urllib"
-        try:
-            subprocess.run(
-                ["python3", "-c", "import requests"],
-                check=True, capture_output=True, timeout=5,
-            )
-            out["requests"] = "python3 + requests"
-        except Exception:
-            pass
+    if REQUESTS_PYTHON:
+        label = "system" if REQUESTS_PYTHON == "python3" else ".venv"
+        out["requests"] = f"python-requests ({label})"
     if shutil.which("go"):
         out["go"] = "go net/http"
     return out
 
 
-CLIENTS = detect_clients()
+CLIENTS: dict[str, str] = {}
 
 
 def now_ms(t0: float) -> int:
@@ -221,7 +262,9 @@ def send_via_python_urllib(spec: dict, t0: float) -> dict:
 
 
 def send_via_python_requests(spec: dict, t0: float) -> dict:
-    return send_via_script(["python3", "-c", PYTHON_REQUESTS_SCRIPT], spec, t0, "requests")
+    if not REQUESTS_PYTHON:
+        return {"ok": False, "error": "python-requests not available", "duration_ms": now_ms(t0)}
+    return send_via_script([REQUESTS_PYTHON, "-c", PYTHON_REQUESTS_SCRIPT], spec, t0, "requests")
 
 
 def send_via_go(spec: dict, t0: float) -> dict:
@@ -313,6 +356,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    global REQUESTS_PYTHON, CLIENTS
+    no_bootstrap = "--no-bootstrap" in sys.argv
+    REQUESTS_PYTHON = resolve_requests_python()
+    if not REQUESTS_PYTHON and not no_bootstrap:
+        REQUESTS_PYTHON = bootstrap_requests_venv()
+    CLIENTS = detect_clients()
     print(f"req-sender companion listening on http://{HOST}:{PORT}")
     print(f"detected clients: {CLIENTS}")
     print(f"allowed origins:")

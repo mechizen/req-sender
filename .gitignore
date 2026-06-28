@@ -6,3 +6,6 @@ node_modules/
 .vscode/
 .idea/
 .claude/settings.local.json
+.venv/
+__pycache__/
+*.pyc

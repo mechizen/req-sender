@@ -83,10 +83,20 @@ UI のカード右上の **via** セレクタを切り替えて使う：
 - `Browser (fetch)` — 既定。ブラウザの TLS 指紋
 - `Companion · curl` — 実 curl バイナリ (macOS 標準)
 - `Companion · python (urllib)` — Python 標準ライブラリ
-- `Companion · python-requests` — `pip3 install requests` が必要
+- `Companion · python-requests` — companion 起動時に `.venv` を自動作成して install
 - `Companion · go` — `brew install go` が必要
 
 利用可能なクライアントは companion 起動時に検出され、UI のステータス表示で確認できる。
+
+#### requests の自動セットアップについて
+
+macOS の Homebrew Python は PEP 668 で `pip3 install` を拒否するため、companion は初回起動時に `.venv/` を自動作成して `requests` をその中にインストールする (`.gitignore` 済み)。所要時間は初回のみ 5-10 秒程度。
+
+自動セットアップしたくない場合は `--no-bootstrap` を渡す：
+
+```sh
+python3 companion.py --no-bootstrap
+```
 
 許可されている UI Origin (companion.js 内のホワイトリスト):
 
