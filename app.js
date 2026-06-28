@@ -3,6 +3,9 @@
 const $ = (id) => document.getElementById(id);
 const els = {
   target: $('target'),
+  mode: $('mode'),
+  companionUrl: $('companionUrl'),
+  companionStatus: $('companionStatus'),
   method: $('method'),
   path: $('path'),
   headers: $('headers'),
@@ -79,10 +82,37 @@ async function send() {
   els.resBody.textContent = '';
   els.sentView.textContent = renderSent(req);
 
-  const t0 = performance.now();
-  let res, err;
+  const mode = els.mode.value;
+  const result = mode === 'companion' ? await sendViaCompanion(req) : await sendViaBrowser(req);
+
+  if (!result.ok) {
+    showMeta(`${result.error}  (${result.dur} ms)`, 0);
+    pushHistory({ ...req, status: 0, dur: result.dur, error: result.error });
+    return;
+  }
+
+  showMeta(`${result.status} ${result.statusText}  •  ${result.dur} ms  •  ${formatBytes(result.body.length)}  •  via ${mode}`, result.status);
+  els.resHeaders.textContent = formatHeaders(result.headers);
+  els.resBody.textContent = result.body.slice(0, 4096) + (result.body.length > 4096 ? `\n\n…(+${result.body.length - 4096} bytes)` : '');
+
   try {
-    res = await fetch(req.url, {
+    const ct = (result.headers['content-type'] || '').toLowerCase();
+    if (ct.includes('json')) {
+      els.echoView.textContent = JSON.stringify(JSON.parse(result.body), null, 2);
+    } else {
+      els.echoView.textContent = '(JSONレスポンスではないため echo パース不可)';
+    }
+  } catch {
+    els.echoView.textContent = '(JSONパース失敗)';
+  }
+
+  pushHistory({ ...req, status: result.status, dur: result.dur, mode });
+}
+
+async function sendViaBrowser(req) {
+  const t0 = performance.now();
+  try {
+    const res = await fetch(req.url, {
       method: req.method,
       headers: req.headers,
       body: req.body,
@@ -91,72 +121,57 @@ async function send() {
       credentials: 'omit',
       cache: 'no-store',
     });
+    const dur = Math.round(performance.now() - t0);
+    const headers = {};
+    res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
+    const body = await res.text();
+    return { ok: true, status: res.status, statusText: res.statusText, headers, body, dur };
   } catch (e) {
-    err = e;
+    return { ok: false, error: `ネットワークエラー: ${e.message}`, dur: Math.round(performance.now() - t0) };
   }
-  const dur = Math.round(performance.now() - t0);
+}
 
-  if (err) {
-    showMeta(`ネットワークエラー: ${err.message}  (${dur} ms)`, 0);
-    pushHistory({ ...req, status: 0, dur, error: err.message });
-    return;
-  }
-
-  const headersObj = {};
-  res.headers.forEach((v, k) => { headersObj[k] = v; });
-  const text = await res.text();
-  showMeta(`${res.status} ${res.statusText}  •  ${dur} ms  •  ${formatBytes(text.length)}  •  ${res.url}`, res.status);
-  els.resHeaders.textContent = formatHeaders(headersObj);
-  els.resBody.textContent = text.slice(0, 4096) + (text.length > 4096 ? `\n\n…(+${text.length - 4096} bytes)` : '');
-
-  // echo parse
+async function sendViaCompanion(req) {
+  const t0 = performance.now();
   try {
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('json')) {
-      const j = JSON.parse(text);
-      els.echoView.textContent = JSON.stringify(j, null, 2);
-    } else {
-      els.echoView.textContent = '(JSONレスポンスではないため echo パース不可)';
-    }
-  } catch {
-    els.echoView.textContent = '(JSONパース失敗)';
+    const r = await fetch(els.companionUrl.value.replace(/\/+$/, '') + '/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: req.url, method: req.method, headers: req.headers, body: req.body }),
+    });
+    const dur = Math.round(performance.now() - t0);
+    if (!r.ok) return { ok: false, error: `companion HTTP ${r.status}`, dur };
+    const j = await r.json();
+    if (!j.ok) return { ok: false, error: `companion: ${j.error}`, dur: j.duration_ms || dur };
+    return {
+      ok: true,
+      status: j.status,
+      statusText: j.statusText || '',
+      headers: j.headers || {},
+      body: j.body || '',
+      dur: j.duration_ms || dur,
+    };
+  } catch (e) {
+    return { ok: false, error: `companion接続失敗 (起動してる? CORS?): ${e.message}`, dur: Math.round(performance.now() - t0) };
   }
-
-  pushHistory({ ...req, status: res.status, dur });
 }
 
 async function sendBurst() {
   const n = Math.max(1, Math.min(500, +els.burst.value || 1));
   const req = buildRequest();
   if (!req) return;
-  showMeta(`連打中… (${n}並列)`, null);
+  const mode = els.mode.value;
+  showMeta(`連打中… (${n}並列, via ${mode})`, null);
   const t0 = performance.now();
-  const results = await Promise.all(
-    Array.from({ length: n }, async () => {
-      const t = performance.now();
-      try {
-        const r = await fetch(req.url, {
-          method: req.method,
-          headers: req.headers,
-          body: req.body,
-          redirect: 'follow',
-          mode: 'cors',
-          credentials: 'omit',
-          cache: 'no-store',
-        });
-        return { status: r.status, dur: performance.now() - t };
-      } catch (e) {
-        return { status: 0, dur: performance.now() - t, error: e.message };
-      }
-    })
-  );
+  const sender = mode === 'companion' ? sendViaCompanion : sendViaBrowser;
+  const results = await Promise.all(Array.from({ length: n }, () => sender(req)));
   const dur = Math.round(performance.now() - t0);
   const buckets = {};
-  for (const r of results) buckets[r.status] = (buckets[r.status] || 0) + 1;
+  for (const r of results) buckets[r.ok ? r.status : 0] = (buckets[r.ok ? r.status : 0] || 0) + 1;
   const summary = Object.entries(buckets).sort().map(([s, c]) => `${s}×${c}`).join('  ');
   const avg = Math.round(results.reduce((a, b) => a + b.dur, 0) / results.length);
-  showMeta(`連打完了: 合計 ${dur}ms / 平均 ${avg}ms / ${summary}`, null);
-  pushHistory({ ...req, status: 'burst', dur, summary: `${n}並列: ${summary}` });
+  showMeta(`連打完了: 合計 ${dur}ms / 平均 ${avg}ms / ${summary} (via ${mode})`, null);
+  pushHistory({ ...req, status: 'burst', dur, summary: `${n}並列: ${summary}`, mode });
 }
 
 function buildRequest() {
@@ -291,6 +306,31 @@ els.clearHistory.addEventListener('click', () => {
   renderHistory();
 });
 
+// ---- companion health ----
+let healthTimer;
+async function checkCompanion() {
+  if (els.mode.value !== 'companion') {
+    els.companionStatus.textContent = '';
+    return;
+  }
+  els.companionStatus.textContent = '確認中…';
+  try {
+    const r = await fetch(els.companionUrl.value.replace(/\/+$/, '') + '/health');
+    const j = await r.json();
+    els.companionStatus.textContent = j.ok ? `✓ companion: ${j.client} (node ${j.version})` : '✗ unhealthy';
+    els.companionStatus.style.color = j.ok ? 'var(--ok)' : 'var(--err)';
+  } catch (e) {
+    els.companionStatus.textContent = '✗ 接続不可 (companion起動してる?)';
+    els.companionStatus.style.color = 'var(--err)';
+  }
+}
+function scheduleHealth() {
+  clearTimeout(healthTimer);
+  healthTimer = setTimeout(checkCompanion, 300);
+}
+els.mode.addEventListener('change', checkCompanion);
+els.companionUrl.addEventListener('input', scheduleHealth);
+
 // ---- bind ----
 els.send.addEventListener('click', send);
 els.sendBurst.addEventListener('click', sendBurst);
@@ -301,3 +341,4 @@ document.addEventListener('keydown', (e) => {
 // ---- init ----
 renderPresets();
 renderHistory();
+checkCompanion();

@@ -62,6 +62,43 @@ Cloudflare の場合、Custom rule に以下を追加して Skip:
 
 これらを「生のまま送りたい」要件が出たら、Cloudflare Workers の薄いプロキシかローカルの companion スクリプトを足す構成が必要。
 
+## Companion モード (TLS 指紋検証用)
+
+ブラウザの `fetch()` は TLS 指紋がブラウザ自身のものになるため、Cloudflare Bot Management の `cf-bot-score` は実質常に「人間」(99) になる。「`curl` を名乗っているのに Chrome の TLS 指紋」となり、`User-Agent` を curl にしても本物の curl とは区別される。
+
+**Companion モード** は、UI からローカルの Node.js サーバ経由で実 `curl` バイナリを叩き、本物の curl の TLS/HTTP 指紋で zresp に到達する。結果 (status / headers / body / `cf-ja3-hash` / `cf-bot-score`) を UI に返すので、Browser モードとの差分が比較できる。
+
+### 起動
+
+Node.js が必要 (未インストールなら `brew install node`)。
+
+```sh
+node companion.js
+# req-sender companion (curl) listening on http://127.0.0.1:7777
+```
+
+UI で「送信モード」を **Companion (curl)** に切り替えると、companion 経由でリクエストが送られる。Companion URL は既定で `http://127.0.0.1:7777`。
+
+許可されている UI Origin (companion.js 内のホワイトリスト):
+
+- `https://req-sender.echi1000.workers.dev`
+- `http://localhost:8000`, `http://127.0.0.1:8000`
+- `http://localhost:3000`
+- `null` (`file://` 経由)
+
+別ホストから使いたければ `companion.js` の `ALLOWED_ORIGINS` を編集する。
+
+### 検証フロー例: Browser vs curl の指紋比較
+
+1. UI で「基本 → Echo (JSON)」プリセットを選択
+2. 「Browser (fetch)」モードで送信 → `echo` パネルの `cf-ja3-hash`, `cf-bot-score` をメモ
+3. モードを「Companion (curl)」に切り替え、同じプリセットで送信
+4. 両者の `cf-ja3-hash` と `cf-bot-score` を見比べる
+   - Browser: ブラウザ指紋 (`t13d1516h2_...`系)、score 99 付近
+   - curl: curl 指紋 (`t13d1811h2_...`系)、score 1 付近
+
+これで「TLS 指紋ベースの Bot 検知」が可視化できる。
+
 ## ファイル構成
 
 | ファイル | 役割 |
@@ -70,6 +107,7 @@ Cloudflare の場合、Custom rule に以下を追加して Skip:
 | `style.css` | スタイル |
 | `app.js` | リクエスト送信・履歴・差分表示ロジック |
 | `presets.js` | プリセットデータ |
+| `companion.js` | ローカル Node.js サーバ。UI からの POST で実 `curl` を spawn する |
 
 ## ライセンス
 

@@ -31,6 +31,19 @@
     </div>
 
     <div class="row">
+      <label>送信モード
+        <select id="mode">
+          <option value="browser">Browser (fetch)</option>
+          <option value="companion">Companion (curl)</option>
+        </select>
+      </label>
+      <label>Companion URL
+        <input id="companionUrl" value="http://127.0.0.1:7777" spellcheck="false" style="width:220px">
+      </label>
+      <span id="companionStatus" class="hint" style="align-self:center"></span>
+    </div>
+
+    <div class="row">
       <label>メソッド
         <select id="method">
           <option>GET</option><option>POST</option><option>PUT</option>
