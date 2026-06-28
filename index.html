@@ -14,7 +14,20 @@
 
 <main>
   <section class="builder card">
-    <h2>リクエスト</h2>
+    <div class="card-head">
+      <h2>リクエスト</h2>
+      <div class="via-pill">
+        <span>via</span>
+        <select id="mode">
+          <option value="browser">Browser (fetch)</option>
+          <option value="companion:curl">Companion · curl</option>
+          <option value="companion:python">Companion · python (urllib)</option>
+          <option value="companion:requests">Companion · python-requests</option>
+          <option value="companion:go">Companion · go</option>
+        </select>
+        <span id="companionStatus" class="via-status"></span>
+      </div>
+    </div>
 
     <div class="row">
       <label class="grow">ターゲット
@@ -30,17 +43,10 @@
       </label>
     </div>
 
-    <div class="row">
-      <label>送信モード
-        <select id="mode">
-          <option value="browser">Browser (fetch)</option>
-          <option value="companion">Companion (curl)</option>
-        </select>
+    <div class="row companion-only" hidden>
+      <label class="grow">Companion URL
+        <input id="companionUrl" value="http://127.0.0.1:7777" spellcheck="false">
       </label>
-      <label>Companion URL
-        <input id="companionUrl" value="http://127.0.0.1:7777" spellcheck="false" style="width:220px">
-      </label>
-      <span id="companionStatus" class="hint" style="align-self:center"></span>
     </div>
 
     <div class="row">

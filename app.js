@@ -83,15 +83,17 @@ async function send() {
   els.sentView.textContent = renderSent(req);
 
   const mode = els.mode.value;
-  const result = mode === 'companion' ? await sendViaCompanion(req) : await sendViaBrowser(req);
+  const result = mode.startsWith('companion:')
+    ? await sendViaCompanion(req, mode.slice('companion:'.length))
+    : await sendViaBrowser(req);
 
   if (!result.ok) {
     showMeta(`${result.error}  (${result.dur} ms)`, 0);
-    pushHistory({ ...req, status: 0, dur: result.dur, error: result.error });
+    pushHistory({ ...req, status: 0, dur: result.dur, error: result.error, mode });
     return;
   }
 
-  showMeta(`${result.status} ${result.statusText}  •  ${result.dur} ms  •  ${formatBytes(result.body.length)}  •  via ${mode}`, result.status);
+  showMeta(`${result.status} ${result.statusText}  •  ${result.dur} ms  •  ${formatBytes(result.body.length)}  •  via ${modeLabel(mode)}`, result.status);
   els.resHeaders.textContent = formatHeaders(result.headers);
   els.resBody.textContent = result.body.slice(0, 4096) + (result.body.length > 4096 ? `\n\n…(+${result.body.length - 4096} bytes)` : '');
 
@@ -131,13 +133,13 @@ async function sendViaBrowser(req) {
   }
 }
 
-async function sendViaCompanion(req) {
+async function sendViaCompanion(req, client) {
   const t0 = performance.now();
   try {
     const r = await fetch(els.companionUrl.value.replace(/\/+$/, '') + '/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: req.url, method: req.method, headers: req.headers, body: req.body }),
+      body: JSON.stringify({ url: req.url, method: req.method, headers: req.headers, body: req.body, client }),
     });
     const dur = Math.round(performance.now() - t0);
     if (!r.ok) return { ok: false, error: `companion HTTP ${r.status}`, dur };
@@ -156,21 +158,28 @@ async function sendViaCompanion(req) {
   }
 }
 
+function modeLabel(mode) {
+  if (mode === 'browser') return 'Browser';
+  if (mode.startsWith('companion:')) return `Companion · ${mode.slice('companion:'.length)}`;
+  return mode;
+}
+
 async function sendBurst() {
   const n = Math.max(1, Math.min(500, +els.burst.value || 1));
   const req = buildRequest();
   if (!req) return;
   const mode = els.mode.value;
-  showMeta(`連打中… (${n}並列, via ${mode})`, null);
+  showMeta(`連打中… (${n}並列, via ${modeLabel(mode)})`, null);
   const t0 = performance.now();
-  const sender = mode === 'companion' ? sendViaCompanion : sendViaBrowser;
+  const client = mode.startsWith('companion:') ? mode.slice('companion:'.length) : null;
+  const sender = client ? (r) => sendViaCompanion(r, client) : sendViaBrowser;
   const results = await Promise.all(Array.from({ length: n }, () => sender(req)));
   const dur = Math.round(performance.now() - t0);
   const buckets = {};
   for (const r of results) buckets[r.ok ? r.status : 0] = (buckets[r.ok ? r.status : 0] || 0) + 1;
   const summary = Object.entries(buckets).sort().map(([s, c]) => `${s}×${c}`).join('  ');
   const avg = Math.round(results.reduce((a, b) => a + b.dur, 0) / results.length);
-  showMeta(`連打完了: 合計 ${dur}ms / 平均 ${avg}ms / ${summary} (via ${mode})`, null);
+  showMeta(`連打完了: 合計 ${dur}ms / 平均 ${avg}ms / ${summary} (via ${modeLabel(mode)})`, null);
   pushHistory({ ...req, status: 'burst', dur, summary: `${n}並列: ${summary}`, mode });
 }
 
@@ -306,24 +315,42 @@ els.clearHistory.addEventListener('click', () => {
   renderHistory();
 });
 
-// ---- companion health ----
+// ---- companion health / UI toggle ----
 let healthTimer;
+let availableClients = null;
+
+function toggleCompanionRow() {
+  const isCompanion = els.mode.value.startsWith('companion:');
+  document.querySelectorAll('.companion-only').forEach(el => {
+    if (isCompanion) el.removeAttribute('hidden');
+    else el.setAttribute('hidden', '');
+  });
+}
+
+function setStatus(text, kind) {
+  els.companionStatus.textContent = text || '';
+  els.companionStatus.className = 'via-status' + (kind ? ' ' + kind : '');
+}
+
 async function checkCompanion() {
-  if (els.mode.value !== 'companion') {
-    els.companionStatus.textContent = '';
-    return;
-  }
-  els.companionStatus.textContent = '確認中…';
+  toggleCompanionRow();
+  if (!els.mode.value.startsWith('companion:')) { setStatus(''); return; }
+  setStatus('確認中…');
   try {
     const r = await fetch(els.companionUrl.value.replace(/\/+$/, '') + '/health');
     const j = await r.json();
-    els.companionStatus.textContent = j.ok ? `✓ companion: ${j.client} (node ${j.version})` : '✗ unhealthy';
-    els.companionStatus.style.color = j.ok ? 'var(--ok)' : 'var(--err)';
+    availableClients = j.clients || {};
+    const client = els.mode.value.slice('companion:'.length);
+    if (client in availableClients) {
+      setStatus(`✓ ${availableClients[client]}`, 'ok');
+    } else {
+      setStatus(`✗ ${client} 未検出 (${Object.keys(availableClients).join(', ') || 'none'})`, 'err');
+    }
   } catch (e) {
-    els.companionStatus.textContent = '✗ 接続不可 (companion起動してる?)';
-    els.companionStatus.style.color = 'var(--err)';
+    setStatus('✗ companion 未起動', 'err');
   }
 }
+
 function scheduleHealth() {
   clearTimeout(healthTimer);
   healthTimer = setTimeout(checkCompanion, 300);

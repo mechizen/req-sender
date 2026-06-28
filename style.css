@@ -54,6 +54,33 @@ main {
 .card h2 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
 .card h3 { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
 
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.card-head h2 { margin: 0; }
+.via-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px 3px 10px;
+}
+.via-pill select {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--text);
+  font-family: inherit;
+  font-weight: 500;
+}
+.via-pill select:focus { box-shadow: none; }
+.via-status { font-size: 10px; color: var(--muted); margin-left: 4px; }
+.via-status.ok { color: var(--ok); }
+.via-status.err { color: var(--err); }
+
 .builder { grid-column: 1; }
 .presets { grid-column: 2; grid-row: 1 / span 2; }
 .response { grid-column: 1 / span 2; }

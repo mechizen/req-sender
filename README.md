@@ -70,14 +70,23 @@ Cloudflare の場合、Custom rule に以下を追加して Skip:
 
 ### 起動
 
-Node.js が必要 (未インストールなら `brew install node`)。
+macOS 標準の Python 3 で動く (追加 install 不要)。
 
 ```sh
-node companion.js
-# req-sender companion (curl) listening on http://127.0.0.1:7777
+python3 companion.py
+# req-sender companion listening on http://127.0.0.1:7777
+# detected clients: {'curl': 'curl', 'python': 'python3 urllib', 'go': 'go net/http'}
 ```
 
-UI で「送信モード」を **Companion (curl)** に切り替えると、companion 経由でリクエストが送られる。Companion URL は既定で `http://127.0.0.1:7777`。
+UI のカード右上の **via** セレクタを切り替えて使う：
+
+- `Browser (fetch)` — 既定。ブラウザの TLS 指紋
+- `Companion · curl` — 実 curl バイナリ (macOS 標準)
+- `Companion · python (urllib)` — Python 標準ライブラリ
+- `Companion · python-requests` — `pip3 install requests` が必要
+- `Companion · go` — `brew install go` が必要
+
+利用可能なクライアントは companion 起動時に検出され、UI のステータス表示で確認できる。
 
 許可されている UI Origin (companion.js 内のホワイトリスト):
 
@@ -107,7 +116,7 @@ UI で「送信モード」を **Companion (curl)** に切り替えると、comp
 | `style.css` | スタイル |
 | `app.js` | リクエスト送信・履歴・差分表示ロジック |
 | `presets.js` | プリセットデータ |
-| `companion.js` | ローカル Node.js サーバ。UI からの POST で実 `curl` を spawn する |
+| `companion.py` | ローカル Python サーバ。UI からの POST で curl/python/go の実バイナリを spawn する |
 
 ## ライセンス
 
