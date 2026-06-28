@@ -25,7 +25,7 @@ PORT = int(os.environ.get("PORT", "7777"))
 HOST = "127.0.0.1"
 
 ALLOWED_ORIGINS = {
-    "https://req-sender.echi1000.workers.dev",
+    "https://req-sender.strayengine.workers.dev",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://localhost:3000",

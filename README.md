@@ -15,13 +15,17 @@
 
 ## 使い方
 
-`file://` でも動くが、Origin が `null` になり CORS で詰まるケースが多いのでローカル HTTP サーバ経由を推奨：
+ホスト済み UI: <https://req-sender.strayengine.workers.dev>
+
+普段の検証はこの URL を開けばOK。ローカルでHTML/JS/CSSを編集してすぐ試したい時だけ、ローカル HTTP サーバ経由で開く：
 
 ```sh
 python3 -m http.server 8000
 ```
 
 開く: <http://localhost:8000>
+
+`file://` は Origin が `null` になり、companion を含むいくつかのケースで CORS に引っかかるので非推奨。
 
 ## サーバ側の前提
 
@@ -89,7 +93,7 @@ python3 companion.py --no-bootstrap
 
 許可されている UI Origin (companion.py 内のホワイトリスト):
 
-- `https://req-sender.echi1000.workers.dev`
+- `https://req-sender.strayengine.workers.dev`
 - `http://localhost:8000`, `http://127.0.0.1:8000`
 - `http://localhost:3000`
 - `null` (`file://` 経由)
