@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CDN/WAF 検証クライアント (zresp)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>CDN / WAF 検証クライアント</h1>
+  <p class="sub">zresp向け。ブラウザから直接 fetch するので送信元IPはこの端末。</p>
+</header>
+
+<main>
+  <section class="builder card">
+    <h2>リクエスト</h2>
+
+    <div class="row">
+      <label class="grow">ターゲット
+        <input list="targets" id="target" value="https://zresp.enjoycod.ing" spellcheck="false">
+        <datalist id="targets">
+          <option value="https://www.enjoycod.ing"></option>
+          <option value="https://zresp.enjoycod.ing"></option>
+          <option value="https://dresp.enjoycod.ing"></option>
+          <option value="https://resp.enjoycod.ing"></option>
+          <option value="https://www.term-systems.com"></option>
+          <option value="https://www.term-systems.dev"></option>
+        </datalist>
+      </label>
+    </div>
+
+    <div class="row">
+      <label>メソッド
+        <select id="method">
+          <option>GET</option><option>POST</option><option>PUT</option>
+          <option>DELETE</option><option>PATCH</option><option>OPTIONS</option><option>HEAD</option>
+        </select>
+      </label>
+      <label class="grow">パス + クエリ
+        <input id="path" value="/api/echo" spellcheck="false">
+      </label>
+    </div>
+
+    <div class="row">
+      <label class="grow">追加ヘッダ <span class="hint">(key: value を改行区切り。fetchの禁止ヘッダは無視される)</span>
+        <textarea id="headers" rows="4" spellcheck="false" placeholder="X-Test: hello&#10;Accept-Encoding: br"></textarea>
+      </label>
+    </div>
+
+    <div class="row">
+      <label class="grow">ボディ <span class="hint">(GET/HEADでは無視)</span>
+        <textarea id="body" rows="3" spellcheck="false"></textarea>
+      </label>
+    </div>
+
+    <div class="row actions">
+      <button id="send" class="primary">送信</button>
+      <label>連打回数 <input id="burst" type="number" value="20" min="1" max="500"></label>
+      <button id="sendBurst">連打送信 (並列)</button>
+      <button id="copyCurl">curlにコピー</button>
+      <button id="clearHistory" class="muted">履歴クリア</button>
+    </div>
+  </section>
+
+  <section class="presets card">
+    <h2>プリセット</h2>
+    <div class="tabs" id="tabs">
+      <button data-cat="basic" class="active">基本</button>
+      <button data-cat="waf">WAF</button>
+      <button data-cat="cdn">CDN/キャッシュ</button>
+      <button data-cat="bot">レート/Bot</button>
+      <button data-cat="resp">レスポンス整形</button>
+    </div>
+    <ul id="presetList"></ul>
+  </section>
+
+  <section class="response card">
+    <h2>結果</h2>
+    <div id="meta" class="meta"></div>
+
+    <div class="diff">
+      <div>
+        <h3>送信したリクエスト <span class="hint">(ブラウザ視点)</span></h3>
+        <pre id="sentView"></pre>
+      </div>
+      <div>
+        <h3>zresp が受信したリクエスト <span class="hint">(/api/echo 系でのみ表示)</span></h3>
+        <pre id="echoView"></pre>
+      </div>
+    </div>
+
+    <h3>レスポンスヘッダ</h3>
+    <pre id="resHeaders"></pre>
+    <h3>レスポンスボディ <span class="hint">(先頭4KB)</span></h3>
+    <pre id="resBody"></pre>
+  </section>
+
+  <section class="history card">
+    <h2>履歴</h2>
+    <ul id="historyList"></ul>
+  </section>
+</main>
+
+<script src="presets.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
